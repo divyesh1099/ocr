@@ -1,0 +1,6 @@
+*
+!backend/requirements.txt
+!backend/src/
+!selfhost/server.py
+!frontend/dist/
+**/__pycache__

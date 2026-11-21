@@ -24,12 +24,18 @@ def aws(monkeypatch, tmp_path):
         ddb = boto3.client("dynamodb")
         ddb.create_table(
             TableName="ocr-test",
-            AttributeDefinitions=[{"AttributeName": n, "AttributeType": "S"} for n in ("PK", "SK", "GSI1PK", "GSI1SK")],
+            AttributeDefinitions=[{"AttributeName": n, "AttributeType": "S"}
+                                  for n in ("PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK")],
             KeySchema=[{"AttributeName": "PK", "KeyType": "HASH"}, {"AttributeName": "SK", "KeyType": "RANGE"}],
             GlobalSecondaryIndexes=[{
                 "IndexName": "GSI1",
                 "KeySchema": [{"AttributeName": "GSI1PK", "KeyType": "HASH"},
                               {"AttributeName": "GSI1SK", "KeyType": "RANGE"}],
+                "Projection": {"ProjectionType": "ALL"},
+            }, {
+                "IndexName": "GSI2",
+                "KeySchema": [{"AttributeName": "GSI2PK", "KeyType": "HASH"},
+                              {"AttributeName": "GSI2SK", "KeyType": "RANGE"}],
                 "Projection": {"ProjectionType": "ALL"},
             }],
             BillingMode="PAY_PER_REQUEST",
@@ -47,6 +53,7 @@ def aws(monkeypatch, tmp_path):
         monkeypatch.setenv("TEXTRACT_SNS_TOPIC_ARN", "arn:aws:sns:ap-south-1:123456789012:t")
         monkeypatch.setenv("TEXTRACT_SNS_ROLE_ARN", "arn:aws:iam::123456789012:role/t")
         monkeypatch.setenv("TMPDIR", str(tmp_path))
+        monkeypatch.delenv("EVENT_BUS_NAME", raising=False)
         yield urls
 
 

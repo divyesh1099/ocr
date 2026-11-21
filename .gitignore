@@ -4,6 +4,18 @@ __pycache__/
 .ruff_cache/
 .venv/
 backend/build/
-cdk-outputs.json
 .env
 .DS_Store
+backend/dist/
+# Terraform
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+infra/terraform.tfvars
+crash.log
+frontend/dist/
+
+# Self-hosted secrets
+selfhost/.env
+selfhost/cloudflared/

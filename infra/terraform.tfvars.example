@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (git-ignored) to override defaults, or pass TF_VAR_* env vars.
+# scripts/deploy.sh sets superadmin_email from SUPERADMIN_EMAIL.
+
+superadmin_email      = "you@example.com"
+# alarm_email         = "alerts@example.com"
+aws_region            = "ap-south-1"
+domain_name           = "ocr.divyeshvishwakarma.com"   # "" = use the *.cloudfront.net address
+# cloudflare_zone     = "divyeshvishwakarma.com"       # derived from domain_name when empty
+textract_concurrency  = 5
+tesseract_concurrency = 50
+upload_retention_days = 7
+result_retention_days = 30
+stall_hours           = 6
+github_repository     = "divyesh1099/ocr"              # "" = don't create the GitHub deploy role

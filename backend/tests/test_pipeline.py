@@ -110,6 +110,7 @@ def test_full_pipeline(aws, monkeypatch):
     job = jobs.get_job(job_id, consistent=True)
     assert job["status"] == "done", job
     assert job["pending"] == 0
+    assert "GSI2PK" not in job  # left the active-jobs index
     assert job["docsDone"] == 3  # a.pdf, b.pdf, inner.zip/deep/c.pdf
     assert job["docsSkipped"] == 1  # readme.txt
     assert job["pagesDone"] == 6
