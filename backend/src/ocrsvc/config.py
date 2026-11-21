@@ -1,4 +1,4 @@
-"""Runtime configuration, read from environment variables set by the CDK stack."""
+"""Runtime configuration, read from environment variables set by Terraform (infra/)."""
 from __future__ import annotations
 
 import os
@@ -24,6 +24,8 @@ TEXTRACT_SNS_ROLE_ARN = lambda: env("TEXTRACT_SNS_ROLE_ARN", "")  # noqa: E731
 RAZORPAY_SECRET_ARN = lambda: env("RAZORPAY_SECRET_ARN", "")  # noqa: E731
 SUPERADMIN_EMAIL = lambda: env("SUPERADMIN_EMAIL", "").strip().lower()  # noqa: E731
 APP_NAME = lambda: env("APP_NAME", "OCR")  # noqa: E731
+EVENT_BUS_NAME = lambda: env("EVENT_BUS_NAME", "")  # noqa: E731
+STALL_HOURS = lambda: float(env("STALL_HOURS", "6"))  # noqa: E731
 
 # S3 layout inside the single data bucket
 UPLOAD_PREFIX = "uploads"    # uploads/<sub>/<jobId>/<relPath>

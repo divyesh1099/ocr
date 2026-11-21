@@ -15,11 +15,16 @@ from __future__ import annotations
 import hashlib
 import logging
 
-from . import config, db, queues, settings, users
+from . import config, db, events, queues, settings, users
 
 log = logging.getLogger("ocr")
 
 TERMINAL_DOC = ("done", "failed", "skipped")
+
+# Jobs that are processing or finalizing carry GSI2PK = ACTIVE, so the sweeper can find
+# them without scanning the table. Remove it whenever a job reaches a terminal state.
+ACTIVE = "ACTIVE"
+CLEAR_ACTIVE = "REMOVE GSI2PK, GSI2SK"
 
 
 # ---------------------------------------------------------------- jobs
@@ -56,16 +61,18 @@ def upload_prefix(owner: str, job_id: str) -> str:
 
 def submit(job_id: str) -> bool:
     """created -> processing, and enqueue the first scan of the upload prefix."""
+    now = db.now_iso()
     new = db.update(
         db.job_key(job_id),
-        "SET #s = :p, pending = :one, submittedAt = :t",
-        {":p": "processing", ":one": 1, ":t": db.now_iso(), ":c": "created"},
+        "SET #s = :p, pending = :one, submittedAt = :t, GSI2PK = :a, GSI2SK = :t",
+        {":p": "processing", ":one": 1, ":t": now, ":c": "created", ":a": ACTIVE},
         names={"#s": "status"},
         condition="#s = :c",
     )
     if not new:
         return False
     queues.send(config.INGEST_QUEUE_URL(), {"type": "scan", "jobId": job_id, "taskId": "scan-0"})
+    events.emit("Job Submitted", events.job_summary(new))
     return True
 
 
@@ -114,7 +121,8 @@ def check_finished(job_id: str) -> None:
     if not job or job["status"] != "processing" or job.get("pending", 1) > 0:
         return
     won = db.update(
-        db.job_key(job_id), "SET #s = :f", {":f": "finalizing", ":p": "processing", ":z": 0},
+        db.job_key(job_id), "SET #s = :f, finalizingAt = :t",
+        {":f": "finalizing", ":p": "processing", ":z": 0, ":t": db.now_iso()},
         names={"#s": "status"}, condition="#s = :p AND pending <= :z",
     )
     if won:
@@ -223,6 +231,8 @@ def doc_finished(job_id: str, doc_id: str, status: str, pages_done: int = 0, err
     except db.TxConflict:
         log.info("doc %s/%s already terminal", job_id, doc_id)
         return
+    if status == "failed":
+        events.emit("Document Failed", {"jobId": job_id, "docId": doc_id, "error": error[:1000]})
     check_finished(job_id)
 
 

@@ -6,6 +6,8 @@ Item layout (PK / SK):
   INVITE#<email>    INVITE                  invitation (invite-only mode)
   SETTINGS          GLOBAL                  site settings (access mode, prices, packs)
   JOB#<jobId>       META                    job (counters, status)            GSI1: OWNER#<sub> / createdAt
+                                                                              GSI2: ACTIVE / submittedAt (sparse:
+                                                                              only while processing/finalizing)
   JOB#<jobId>       DOC#<docId>             one source document inside a job
   JOB#<jobId>       TASK#<id>               idempotency markers for queue tasks
   TEXTRACT#<id>     MAP                     Textract async JobId -> (job, doc, unit)
@@ -133,7 +135,7 @@ def query(pk: str, sk_prefix: str | None = None, index: str | None = None, limit
           cursor: dict | None = None, forward: bool = True) -> tuple[list[dict], dict | None]:
     from boto3.dynamodb.conditions import Key
 
-    pk_name, sk_name = ("GSI1PK", "GSI1SK") if index == "GSI1" else ("PK", "SK")
+    pk_name, sk_name = (f"{index}PK", f"{index}SK") if index else ("PK", "SK")
     cond = Key(pk_name).eq(pk)
     if sk_prefix:
         cond = cond & Key(sk_name).begins_with(sk_prefix)

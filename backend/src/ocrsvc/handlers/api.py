@@ -56,7 +56,7 @@ def _own_job(req: Request, job_id: str) -> dict:
 
 
 def _presign(method: str, params: dict, ttl: int = URL_TTL) -> str:
-    return aws.client("s3").generate_presigned_url(method, Params=params, ExpiresIn=ttl)
+    return aws.presign_client().generate_presigned_url(method, Params=params, ExpiresIn=ttl)
 
 
 def _public_job(job: dict) -> dict:
@@ -448,7 +448,14 @@ def handler(event, context):
         if not opts.get("public"):
             if not req.sub:
                 raise HttpError(401, "Sign in first")
-            req.user = users.get_profile(req.sub) or (users.create_profile(req.sub, req.email) if req.email else None)
+            req.user = users.get_profile(req.sub)
+            if not req.user and req.email:
+                # Normally Cognito's pre-sign-up trigger enforces the access mode; enforce it here
+                # too for identity providers without that hook (selfhost/ behind Cloudflare Access).
+                allowed, reason = users.signup_allowed(req.email)
+                if not allowed:
+                    raise HttpError(403, reason, code="not_invited")
+                req.user = users.create_profile(req.sub, req.email)
             if not req.user:
                 raise HttpError(403, "No profile for this account")
             if not opts.get("allow_inactive") and req.user.get("status") != "active":

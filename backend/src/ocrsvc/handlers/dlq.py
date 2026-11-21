@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 
-from .. import db, jobs
+from .. import db, events, jobs
 
 log = logging.getLogger("ocr")
 log.setLevel(logging.INFO)
@@ -58,5 +58,7 @@ def handle(source: str, body: dict) -> None:
     elif body.get("type") == "delete":
         log.error("deleting job %s failed repeatedly", job_id)
     else:  # finalize
-        db.update(db.job_key(job_id), "SET #s = :f, lastError = :e", {":f": "failed", ":e": f"finalize: {REASON}"},
-                  names={"#s": "status"})
+        failed = db.update(db.job_key(job_id), f"SET #s = :f, lastError = :e {jobs.CLEAR_ACTIVE}",
+                           {":f": "failed", ":e": f"finalize: {REASON}"}, names={"#s": "status"})
+        if failed:
+            events.emit("Job Failed", events.job_summary(failed))

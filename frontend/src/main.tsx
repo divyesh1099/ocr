@@ -12,9 +12,11 @@ async function boot() {
   try {
     const cfg: AppConfig = await (await fetch('/config.json', { cache: 'no-store' })).json();
     setConfig(cfg);
-    Amplify.configure({
-      Auth: { Cognito: { userPoolId: cfg.userPoolId, userPoolClientId: cfg.userPoolClientId, loginWith: { email: true } } },
-    });
+    if (cfg.auth !== 'cloudflare-access') {
+      Amplify.configure({
+        Auth: { Cognito: { userPoolId: cfg.userPoolId, userPoolClientId: cfg.userPoolClientId, loginWith: { email: true } } },
+      });
+    }
     root.render(
       <React.StrictMode>
         <BrowserRouter>

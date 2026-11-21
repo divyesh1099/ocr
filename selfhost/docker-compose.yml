@@ -1,0 +1,79 @@
+# Self-hosted OCR site (temporary home until the AWS stack in infra/ is live).
+#   ./selfhost/up.sh            build + start everything (reads selfhost/.env)
+# Services mirror AWS: dynamodb -> DynamoDB, sqs -> SQS (ElasticMQ), s3 -> S3 (RustFS),
+# app -> API Gateway + Lambda + Scheduler, tunnel -> CloudFront + DNS (Cloudflare Tunnel).
+name: ocr
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  dynamodb:
+    <<: *restart
+    image: amazon/dynamodb-local:3.3.2
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/data"]
+    user: root
+    volumes: [dynamodb:/data]
+
+  sqs:
+    <<: *restart
+    image: softwaremill/elasticmq-native:1.7.1
+    user: root
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf:ro
+      - sqs:/data
+
+  s3:
+    <<: *restart
+    image: rustfs/rustfs:1.0.6
+    user: root
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:?run selfhost/up.sh}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:?run selfhost/up.sh}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "false"
+    volumes: [s3:/data]
+    ports: ["127.0.0.1:9000:9000"]
+
+  app:
+    <<: *restart
+    build:
+      context: ..
+      dockerfile: selfhost/Dockerfile
+    depends_on: [dynamodb, sqs, s3]
+    environment:
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+      AWS_ENDPOINT_URL_DYNAMODB: http://dynamodb:8000
+      AWS_ENDPOINT_URL_SQS: http://sqs:9324
+      AWS_ENDPOINT_URL_S3: http://s3:9000
+      S3_ADDRESSING_STYLE: path
+      PUBLIC_S3_ENDPOINT: ${PUBLIC_S3_ENDPOINT:-http://localhost:9000}
+      SITE_ORIGIN: ${SITE_ORIGIN:-http://localhost:18080}
+      TABLE_NAME: ocr-main
+      DATA_BUCKET: ocr-data
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:?set SUPERADMIN_EMAIL in selfhost/.env}
+      ACCESS_TEAM_DOMAIN: ${ACCESS_TEAM_DOMAIN:-}
+      ACCESS_AUD: ${ACCESS_AUD:-}
+      ACCESS_CERTS_URL: ${ACCESS_CERTS_URL:-}
+      ACCESS_ISSUER: ${ACCESS_ISSUER:-}
+      TESSERACT_WORKERS: ${TESSERACT_WORKERS:-}
+      STALL_HOURS: "6"
+    ports: ["127.0.0.1:18080:8080"]
+
+  tunnel:
+    <<: *restart
+    image: cloudflare/cloudflared:2026.11.1
+    profiles: [public]
+    depends_on: [app, s3]
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    user: root
+    volumes: ["./cloudflared:/etc/cloudflared:ro"]
+
+volumes:
+  dynamodb:
+  sqs:
+  s3:

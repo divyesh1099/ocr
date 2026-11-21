@@ -11,7 +11,7 @@ import io
 import logging
 import zipfile
 
-from .. import aws, config, db, jobs, outputs, queues, s3io
+from .. import aws, config, db, events, jobs, outputs, queues, s3io
 
 log = logging.getLogger("ocr")
 log.setLevel(logging.INFO)
@@ -63,9 +63,12 @@ def finalize(job_id: str) -> None:
         writer.abort()
         raise
 
-    db.update(db.job_key(job_id), "SET #s = :d, resultKey = :k, resultBytes = :b, finishedAt = :t",
-              {":d": "done", ":k": zip_key, ":b": writer.written, ":t": db.now_iso(), ":f": "finalizing"},
-              names={"#s": "status"}, condition="#s = :f")
+    done = db.update(db.job_key(job_id),
+                     f"SET #s = :d, resultKey = :k, resultBytes = :b, finishedAt = :t {jobs.CLEAR_ACTIVE}",
+                     {":d": "done", ":k": zip_key, ":b": writer.written, ":t": db.now_iso(), ":f": "finalizing"},
+                     names={"#s": "status"}, condition="#s = :f")
+    if done:
+        events.emit("Job Completed", {**events.job_summary(done), "resultBytes": writer.written})
     _delete_prefix(bucket, f"{config.WORK_PREFIX}/{job_id}/")
     log.info("job %s finalized (%s bytes)", job_id, writer.written)
 
@@ -97,5 +100,6 @@ def delete_job(job_id: str) -> None:
         for item in db.query_all(f"JOB#{job_id}"):
             if item["SK"] != "META":
                 bw.delete_item(Key={"PK": item["PK"], "SK": item["SK"]})
-    db.update(db.job_key(job_id), "SET #s = :x, purgedAt = :t", {":x": "deleted", ":t": db.now_iso()},
+    db.update(db.job_key(job_id), f"SET #s = :x, purgedAt = :t {jobs.CLEAR_ACTIVE}",
+              {":x": "deleted", ":t": db.now_iso()},
               names={"#s": "status"})

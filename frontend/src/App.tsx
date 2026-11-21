@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Authenticator } from '@aws-amplify/ui-react';
-import { signOut } from 'aws-amplify/auth';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { api, type PublicSettings, type User } from './api';
+import { api, logout, usesCloudflareAccess, type PublicSettings, type User } from './api';
 import Dashboard from './pages/Dashboard';
 import NewJob from './pages/NewJob';
 import JobDetail from './pages/JobDetail';
@@ -54,7 +53,7 @@ function Shell({ session, children }: { session: Session; children: React.ReactN
         <div className="who">
           {settings.billingEnabled && !user.unlimited && <span className="credits">{user.credits.toLocaleString()} credits</span>}
           <span className="email">{user.email}</span>
-          <button className="ghost" onClick={() => signOut()}>Sign out</button>
+          <button className="ghost" onClick={() => logout()}>Sign out</button>
         </div>
       </header>
       <main>{children}</main>
@@ -75,7 +74,14 @@ function SignedIn() {
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
-  if (error) return <div className="center card">Could not load your account: {error}</div>;
+  if (error) {
+    return (
+      <div className="center card narrow">
+        <p>Could not load your account: {error}</p>
+        <button onClick={() => logout()}>Sign out</button>
+      </div>
+    );
+  }
   if (!session) return <div className="center muted">Loading…</div>;
   if (session.user.status !== 'active') {
     return (
@@ -86,7 +92,7 @@ function SignedIn() {
             ? 'Your account was created. The administrator has to approve it before you can upload files. Check back soon.'
             : 'This account has been suspended. Contact the administrator if you think this is a mistake.'}
         </p>
-        <button onClick={() => signOut()}>Sign out</button>
+        <button onClick={() => logout()}>Sign out</button>
       </div>
     );
   }
@@ -110,6 +116,8 @@ export default function App() {
     api<PublicSettings>('/public/config', { auth: false }).then(setSettings).catch(() => undefined);
   }, []);
   const inviteOnly = settings?.accessMode === "invite";
+  // Behind Cloudflare Access the visitor is already signed in before the page loads.
+  if (usesCloudflareAccess()) return <SignedIn />;
   return (
     <Authenticator.Provider>
       <Gate settings={settings} inviteOnly={inviteOnly} />
