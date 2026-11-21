@@ -1,0 +1,31 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Install Tesseract (for the real-OCR worker test)
+        run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr poppler-utils
+      - name: Backend lint + tests
+        working-directory: backend
+        run: |
+          pip install -r requirements-dev.txt
+          ruff check src tests
+          pytest -q
+      - name: Frontend build
+        working-directory: frontend
+        run: npm ci && npm run build
+      - name: CDK synth
+        run: |
+          ./scripts/build-backend.sh
+          cd infra && npm ci && npx tsc --noEmit
+          npx cdk synth -q -c superadminEmail=ci@example.com

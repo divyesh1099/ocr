@@ -1,0 +1,35 @@
+name: Deploy
+# Manual for now. Switch to `push: branches: [main]` once the first deploy works.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # GitHub OIDC -> AWS role, no long-lived keys
+  contents: read
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+      SUPERADMIN_EMAIL: ${{ vars.SUPERADMIN_EMAIL }}
+      ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
+      DOMAIN: ${{ vars.DOMAIN || 'ocr.dshare.me' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: docker/setup-qemu-action@v3   # the Tesseract Lambda image is arm64
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy
+        run: ./scripts/deploy.sh
