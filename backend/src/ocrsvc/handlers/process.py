@@ -31,6 +31,11 @@ def handle(msg: dict) -> None:
     doc = jobs.get_doc(msg["jobId"], msg["docId"], consistent=True)
     if not job or not doc or job.get("deleted") or doc["status"] not in ("queued", "processing"):
         return
+    if job["engine"] == filetypes.COMPRESS:
+        # One file = one compression task; no page counting, no credits.
+        if jobs.start_processing(job["jobId"], doc["docId"], 0, 1):
+            queues.send(config.COMPRESS_QUEUE_URL(), {"jobId": job["jobId"], "docId": doc["docId"]})
+        return
     try:
         with outputs.TempDir() as tmp:
             units = plan_units(job, doc, tmp)

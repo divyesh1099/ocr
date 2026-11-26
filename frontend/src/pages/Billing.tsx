@@ -41,7 +41,7 @@ export default function Billing({ session }: { session: Session }) {
           amount: order.amount,
           currency: order.currency,
           name: settings.siteName,
-          description: `${order.pack.credits.toLocaleString()} OCR credits`,
+          description: `${order.pack.credits.toLocaleString()} credits`,
           prefill: { email: order.email },
           theme: { color: '#1f3a5f' },
           handler: async (resp: any) => {

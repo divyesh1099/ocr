@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, bytes, type Job } from '../api';
+import { api, type Job } from '../api';
 import type { Session } from '../App';
-import { fromDataTransfer, fromFileList, type PickedFile, type Progress, uploadAll } from '../upload';
+import FilePicker, { UploadProgress } from '../components/FilePicker';
+import { type PickedFile, type Progress, uploadAll } from '../upload';
 
 const LANGUAGES: [string, string][] = [
   ['eng', 'English'], ['hin', 'Hindi'], ['mar', 'Marathi'], ['guj', 'Gujarati'], ['ben', 'Bengali'],
@@ -23,17 +24,11 @@ export default function NewJob({ session }: { session: Session }) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [drag, setDrag] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const folderInput = useRef<HTMLInputElement>(null);
 
-  const add = (picked: PickedFile[]) => {
-    const good = picked.filter((p) => OK_EXT.test(p.path) && p.file.size > 0);
+  const add = (good: PickedFile[]) => {
     setFiles((prev) => [...prev, ...good]);
     if (!name && good.length) setName(good.length === 1 ? good[0].path.split('/').pop()! : good[0].path.split('/')[0]);
   };
-  const total = files.reduce((s, f) => s + f.file.size, 0);
-  const tooBig = files.filter((f) => f.file.size > settings.maxFileBytes);
   const toggle = (o: string) => setOutputs((cur) => (cur.includes(o) ? cur.filter((x) => x !== o) : [...cur, o]));
 
   const start = async () => {
@@ -56,37 +51,11 @@ export default function NewJob({ session }: { session: Session }) {
   const price = settings.prices[engine] || 0;
   return (
     <section className="narrow-wide">
-      <h1>New OCR job</h1>
-      <div
-        className={`dropzone${drag ? ' over' : ''}`}
-        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={async (e) => { e.preventDefault(); setDrag(false); add(await fromDataTransfer(e.dataTransfer)); }}
-      >
-        <p><b>Drop files or folders here</b></p>
-        <p className="muted small">PDF, PNG, JPG, TIFF, BMP, GIF, WEBP, and ZIP archives (nested zips are unpacked)</p>
-        <div className="row gap center-x">
-          <button type="button" className="ghost" onClick={() => fileInput.current?.click()}>Choose files</button>
-          <button type="button" className="ghost" onClick={() => folderInput.current?.click()}>Choose a folder</button>
-        </div>
-        <input ref={fileInput} type="file" multiple hidden onChange={(e) => { add(fromFileList(e.target.files)); e.target.value = ''; }} />
-        <input ref={folderInput} type="file" hidden {...({ webkitdirectory: '', directory: '' } as any)}
-          onChange={(e) => { add(fromFileList(e.target.files)); e.target.value = ''; }} />
-      </div>
-
-      {files.length > 0 && (
-        <div className="card">
-          <div className="row between">
-            <b>{files.length.toLocaleString()} files · {bytes(total)}</b>
-            {!busy && <button className="ghost small" onClick={() => setFiles([])}>Clear</button>}
-          </div>
-          <ul className="filelist">
-            {files.slice(0, 50).map((f, i) => <li key={i}><span>{f.path}</span><span className="muted">{bytes(f.file.size)}</span></li>)}
-            {files.length > 50 && <li className="muted">…and {files.length - 50} more</li>}
-          </ul>
-          {tooBig.length > 0 && <p className="error">{tooBig.length} file(s) are over the {bytes(settings.maxFileBytes)} limit and will be skipped.</p>}
-        </div>
-      )}
+      <h1>Get text out of files</h1>
+      <p className="muted">OCR for scanned PDFs, photos and images. You get plain text, JSON or a searchable PDF.</p>
+      <FilePicker files={files} onAdd={add} onClear={() => setFiles([])} accept={OK_EXT} busy={busy}
+        maxFileBytes={settings.maxFileBytes}
+        hint="PDF, PNG, JPG, TIFF, BMP, GIF, WEBP, and ZIP archives (nested zips are unpacked)" />
 
       <div className="card form">
         <label>Job name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. 2024 invoices" /></label>
@@ -119,15 +88,8 @@ export default function NewJob({ session }: { session: Session }) {
           </p>
         )}
         {error && <p className="error">{error}</p>}
-        {progress && (
-          <div className="progress">
-            <div className="bar"><span style={{ width: `${Math.min(100, (progress.sentBytes / Math.max(1, progress.totalBytes)) * 100)}%` }} /></div>
-            <p className="small muted">
-              Uploaded {bytes(progress.sentBytes)} of {bytes(progress.totalBytes)} · {progress.filesDone}/{progress.filesTotal} files
-              {progress.errors.length > 0 && ` · ${progress.errors.length} failed`}
-            </p>
-          </div>
-        )}
+        {progress && <UploadProgress sent={progress.sentBytes} total={progress.totalBytes} done={progress.filesDone}
+          count={progress.filesTotal} failed={progress.errors.length} />}
         <button disabled={busy || !files.length || !outputs.length} onClick={start}>
           {busy ? 'Uploading…' : `Upload and start OCR`}
         </button>

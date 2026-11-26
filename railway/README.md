@@ -48,6 +48,8 @@ ACCESS_AUD=<same as selfhost/.env>
 TESSERACT_WORKERS=2
 STALL_HOURS=6
 ```
+Optionally set `COMPRESS_WORKERS` (default 1), the number of files compressed in parallel. Video compression uses a lot of CPU, so raise it slowly.
+
 Set `TESSERACT_WORKERS` explicitly. Inside a Railway container, the CPU count is the host's, so the default would start far too many OCR processes. Raise it to suit your plan's RAM, about 300–500 MB per worker.
 
 Click **Deploy** after you set the variables.

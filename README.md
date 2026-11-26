@@ -14,6 +14,7 @@ A website for OCR at any scale, from one photo to a 20 GB folder of scanned PDFs
   - **Approval.** Anyone can register, but each account waits until you approve it.
   - **Open.** Anyone can register and buy credits.
 - **Billing.** Page credits bought through Razorpay (INR, UPI, cards). Credits are reserved when a file starts, and pages that fail are refunded. Billing can be switched off for a private deployment.
+- **Compression** (self-hosted and Railway deployments). After sign-in the home page asks *OCR or Compress?*. Compress jobs shrink PDFs (the three passes from [compressPDF](https://github.com/divyesh1099/compressPDF): PyMuPDF image re-encoding, pikepdf/qpdf, Ghostscript), photos (Pillow, optional resize or WebP/JPEG conversion), video (ffmpeg H.264), audio, and Office/EPUB files (images inside are recompressed). Anything else is zipped. You choose *Smallest file*, *Balanced* or *Best quality*. A file that can't be made smaller comes back unchanged. Code: `backend/src/ocrsvc/handlers/compress.py`, worker queue `ocr-compress`. Compression is free and uses no credits. It isn't offered on the Lambda deployment, which lacks ffmpeg and Ghostscript.
 - **Admin page.** Access mode, prices, credit packs, enabled engines, approving or suspending users, granting credits, invitations, and a "force finish" button for a job that gets stuck.
 
 ## Architecture

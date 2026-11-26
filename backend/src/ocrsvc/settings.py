@@ -28,7 +28,7 @@ DEFAULTS: dict = {
         {"id": "scale", "name": "Scale", "credits": 100000, "amount": 999900},
     ],
     "maxFileBytes": 20 * 1024 * 1024 * 1024,
-    "siteName": "OCR",
+    "siteName": "Om",
 }
 
 _cache: dict = {"value": None, "at": 0.0}

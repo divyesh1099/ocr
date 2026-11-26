@@ -41,6 +41,7 @@ ACCESS_AUD = os.environ.get("ACCESS_AUD", "").strip()
 ACCESS_CERTS_URL = os.environ.get("ACCESS_CERTS_URL") or (f"https://{ACCESS_TEAM}/cdn-cgi/access/certs" if ACCESS_TEAM else "")
 ACCESS_ISSUER = os.environ.get("ACCESS_ISSUER") or (f"https://{ACCESS_TEAM}" if ACCESS_TEAM else "")
 TESSERACT_WORKERS = int(os.environ.get("TESSERACT_WORKERS") or max(1, (os.cpu_count() or 2) // 2))
+COMPRESS_WORKERS = int(os.environ.get("COMPRESS_WORKERS") or 1)
 
 # queue -> (handler, batch size, processes)
 CONSUMERS = {
@@ -50,9 +51,10 @@ CONSUMERS = {
     "tesseract": ("ocrsvc.handlers.tesseract.handler", 1, TESSERACT_WORKERS),
     "assemble": ("ocrsvc.handlers.assemble.handler", 1, 2),
     "finalize": ("ocrsvc.handlers.finalize.handler", 1, 1),
+    "compress": ("ocrsvc.handlers.compress.handler", 1, COMPRESS_WORKERS),
 }
 DLQ_CONSUMER = ("ocrsvc.handlers.dlq.handler", 10)
-ALL_QUEUES = ["ingest", "process", "textract", "textract-done", "tesseract", "assemble", "finalize"]
+ALL_QUEUES = ["ingest", "process", "textract", "textract-done", "tesseract", "assemble", "finalize", "compress"]
 
 
 # ---------------------------------------------------------------- bootstrap
@@ -104,14 +106,14 @@ def bootstrap() -> None:
         log.warning("bucket lifecycle not applied: %s", exc)
     try:
         s3.put_bucket_cors(Bucket=bucket, CORSConfiguration={"CORSRules": [{
-            "AllowedMethods": ["PUT", "GET", "HEAD"], "AllowedOrigins": [os.environ.get("SITE_ORIGIN", "*")],
+            "AllowedMethods": ["PUT", "GET", "HEAD"], "AllowedOrigins": [o.strip() for o in os.environ.get("SITE_ORIGIN", "*").split(",") if o.strip()],
             "AllowedHeaders": ["*"], "ExposeHeaders": ["ETag"], "MaxAgeSeconds": 3600}]})
     except Exception as exc:  # noqa: BLE001
         log.warning("bucket CORS not applied (server default applies): %s", exc)
 
     wait_for("SQS", sqs.list_queues)
     for q in ALL_QUEUES:
-        url = sqs.get_queue_url(QueueName=f"{PREFIX}-{q}")["QueueUrl"]
+        url = ensure_queue(sqs, f"{PREFIX}-{q}")
         os.environ[f"{q.replace('-', '_').upper()}_QUEUE_URL"] = url
 
     # Textract is AWS-only: offer Tesseract alone.
@@ -123,6 +125,29 @@ def bootstrap() -> None:
     db.update(db.SETTINGS_KEY, "SET enabledEngines = :e, defaultEngine = :d",
               {":e": engines, ":d": "tesseract"})
     log.info("bootstrap complete")
+
+
+# Queues added after the first deploy: ElasticMQ keeps its queue list on its volume, so a queue
+# that is new in elasticmq.conf may not exist yet. Create it (and its DLQ) the same way.
+NEW_QUEUE_VISIBILITY = {"compress": 3600}
+
+
+def ensure_queue(sqs, name: str) -> str:
+    try:
+        return sqs.get_queue_url(QueueName=name)["QueueUrl"]
+    except sqs.exceptions.QueueDoesNotExist:
+        pass
+    except Exception as exc:  # noqa: BLE001 - some servers raise a generic ClientError
+        if "NonExistentQueue" not in str(exc) and "QueueDoesNotExist" not in str(exc):
+            raise
+    log.info("creating missing queue %s", name)
+    dlq = sqs.create_queue(QueueName=f"{name}-dlq", Attributes={"VisibilityTimeout": "180"})["QueueUrl"]
+    dlq_arn = sqs.get_queue_attributes(QueueUrl=dlq, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
+    short = name[len(PREFIX) + 1:]
+    return sqs.create_queue(QueueName=name, Attributes={
+        "VisibilityTimeout": str(NEW_QUEUE_VISIBILITY.get(short, 1020)),
+        "RedrivePolicy": json.dumps({"deadLetterTargetArn": dlq_arn, "maxReceiveCount": "3"}),
+    })["QueueUrl"]
 
 
 def textract_unavailable(event, context):
