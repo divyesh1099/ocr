@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, bytes, type Job, when } from '../api';
+import { api, bytes, isCompress, saving, type Job, when } from '../api';
 import type { Session } from '../App';
 
 export function StatusBadge({ job }: { job: Job }) {
@@ -36,12 +36,15 @@ export default function Dashboard({ session }: { session: Session }) {
     <section>
       <div className="row between">
         <h1>Your jobs</h1>
-        <Link className="button" to="/new">New job</Link>
+        <div className="row gap">
+          <Link className="button" to="/ocr">New OCR</Link>
+          {session.settings.compressEnabled && <Link className="button" to="/compress">New compress</Link>}
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
       {jobs === null ? <p className="muted">Loading…</p> : jobs.length === 0 ? (
         <div className="card empty">
-          <p>No jobs yet. Start one by uploading PDFs, images, zip files or a whole folder.</p>
+          <p>No jobs yet. Start one by uploading files, zip archives or a whole folder.</p>
           {session.settings.billingEnabled && !session.user.unlimited && (
             <p className="muted">You have {session.user.credits.toLocaleString()} credits.</p>
           )}
@@ -49,7 +52,7 @@ export default function Dashboard({ session }: { session: Session }) {
       ) : (
         <table className="table">
           <thead>
-            <tr><th>Name</th><th>Status</th><th>Files</th><th>Pages</th><th>Engine</th><th>Created</th></tr>
+            <tr><th>Name</th><th>Status</th><th>Files</th><th>Pages / saved</th><th>Type</th><th>Created</th></tr>
           </thead>
           <tbody>
             {jobs.map((j) => (
@@ -57,8 +60,10 @@ export default function Dashboard({ session }: { session: Session }) {
                 <td><Link to={`/jobs/${j.jobId}`}>{j.name}</Link></td>
                 <td><StatusBadge job={j} /></td>
                 <td>{j.docsDone + j.docsFailed + j.docsSkipped}/{j.docsTotal}</td>
-                <td>{j.pagesDone.toLocaleString()}{j.pagesTotal ? ` / ${j.pagesTotal.toLocaleString()}` : ''}</td>
-                <td>{j.engine}</td>
+                <td>{isCompress(j)
+                  ? (j.bytesIn ? `${saving(j.bytesIn, j.bytesOut)} (${bytes(j.bytesIn)} → ${bytes(j.bytesOut)})` : '')
+                  : `${j.pagesDone.toLocaleString()}${j.pagesTotal ? ` / ${j.pagesTotal.toLocaleString()}` : ''}`}</td>
+                <td>{isCompress(j) ? 'Compress' : `OCR · ${j.engine}`}</td>
                 <td className="muted">{when(j.createdAt)}{j.resultBytes ? ` · ${bytes(j.resultBytes)}` : ''}</td>
               </tr>
             ))}

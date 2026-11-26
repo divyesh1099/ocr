@@ -62,7 +62,7 @@ def _presign(method: str, params: dict, ttl: int = URL_TTL) -> str:
 def _public_job(job: dict) -> dict:
     keys = ("jobId", "name", "engine", "outputs", "status", "docsTotal", "docsDone", "docsFailed", "docsSkipped",
             "pagesTotal", "pagesDone", "creditsCharged", "createdAt", "submittedAt", "finishedAt", "owner",
-            "resultBytes", "pending", "language", "lastError")
+            "resultBytes", "pending", "language", "lastError", "compress", "bytesIn", "bytesOut")
     out = {k: job.get(k) for k in keys if k in job}
     out["hasResult"] = bool(job.get("resultKey"))
     return out
@@ -87,6 +87,7 @@ def public_config(req: Request):
         "currency": s["currency"],
         "razorpayKeyId": razorpay.key_id() if s["billingEnabled"] and razorpay.configured() else "",
         "maxFileBytes": s["maxFileBytes"],
+        "compressEnabled": bool(config.COMPRESS_QUEUE_URL()),
     }
 
 
@@ -121,9 +122,35 @@ def list_jobs(req: Request):
     return {"jobs": [_public_job(j) for j in items if not j.get("deleted")], "cursor": _cursor_out(cursor)}
 
 
+COMPRESS_OPTIONS = {
+    "level": ("light", "balanced", "strong"),
+    "imageFormat": ("keep", "webp", "jpeg"),
+    "maxImageSide": (0, 4096, 2560, 1920, 1280),
+    "videoHeight": (0, 1080, 720, 480),
+    "audioBitrate": (0, 192, 128, 96, 64),
+}
+
+
+def _create_compress_job(req: Request, body: dict):
+    if not config.COMPRESS_QUEUE_URL():
+        raise HttpError(400, "Compression is not available on this server")
+    raw = body.get("compress") or {}
+    opts = {}
+    for key, allowed in COMPRESS_OPTIONS.items():
+        value = raw.get(key, allowed[0] if key != "level" else "balanced")
+        if value not in allowed:
+            raise HttpError(400, f"compress.{key} must be one of {list(allowed)}")
+        opts[key] = value
+    job = jobs.create_job(req.sub, str(body.get("name", "")).strip(), filetypes.COMPRESS, ["file"],
+                          extra={"compress": opts})
+    return response(201, {"job": _public_job(job)})
+
+
 @router.route("POST", "/jobs")
 def create_job(req: Request):
     body = req.json()
+    if body.get("mode") == "compress" or body.get("engine") == filetypes.COMPRESS:
+        return _create_compress_job(req, body)
     s = settings.get()
     engine = body.get("engine") or s["defaultEngine"]
     if engine not in s["enabledEngines"]:
@@ -181,7 +208,7 @@ def start_uploads(req: Request):
         if size > max_bytes:
             out.append({"path": rel, "error": f"file is larger than {max_bytes} bytes"})
             continue
-        if filetypes.classify(rel) == filetypes.UNSUPPORTED:
+        if filetypes.classify_for(job["engine"], rel) == filetypes.UNSUPPORTED:
             out.append({"path": rel, "error": "unsupported file type", "skipped": True})
             continue
         key = prefix + rel
@@ -250,7 +277,7 @@ def list_documents(req: Request):
     status = req.query.get("status")
     docs = [
         {k: d.get(k) for k in ("docId", "relPath", "kind", "size", "status", "pages", "unitsTotal", "unitsDone",
-                                "unitsFailed", "error", "outputs", "reserved", "refunded")}
+                                "unitsFailed", "error", "outputs", "reserved", "refunded", "compressedSize", "note")}
         for d in items if not status or d.get("status") == status
     ]
     return {"documents": docs, "cursor": _cursor_out(cursor)}
@@ -274,7 +301,8 @@ def download_job(req: Request):
     job = _own_job(req, req.params["job_id"])
     if not job.get("resultKey"):
         raise HttpError(404, "Results are not ready yet")
-    name = f"{job['name'] or job['jobId']}-ocr.zip".replace('"', "").replace("/", "_")
+    suffix = "compressed" if job["engine"] == filetypes.COMPRESS else "ocr"
+    name = f"{job['name'] or job['jobId']}-{suffix}.zip".replace('"', "").replace("/", "_")
     return {"url": _presign("get_object", {"Bucket": config.DATA_BUCKET(), "Key": job["resultKey"],
                                            "ResponseContentDisposition": f'attachment; filename="{name}"'}, 3600)}
 

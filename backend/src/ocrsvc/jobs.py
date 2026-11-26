@@ -28,7 +28,7 @@ CLEAR_ACTIVE = "REMOVE GSI2PK, GSI2SK"
 
 
 # ---------------------------------------------------------------- jobs
-def create_job(owner: str, name: str, engine: str, outputs: list[str]) -> dict:
+def create_job(owner: str, name: str, engine: str, outputs: list[str], extra: dict | None = None) -> dict:
     job_id = db.new_id(12)
     now = db.now_iso()
     item = {
@@ -46,6 +46,7 @@ def create_job(owner: str, name: str, engine: str, outputs: list[str]) -> dict:
         "createdAt": now,
         "GSI1PK": f"OWNER#{owner}",
         "GSI1SK": now,
+        **(extra or {}),
     }
     db.put(item, condition="attribute_not_exists(PK)")
     return item

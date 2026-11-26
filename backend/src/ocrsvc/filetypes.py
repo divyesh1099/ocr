@@ -8,6 +8,9 @@ IMAGE = "image"   # single-page raster image
 TIFF = "tiff"     # possibly multi-page
 ZIP = "zip"
 UNSUPPORTED = "unsupported"
+FILE = "file"     # any other file: accepted by compress jobs only
+
+COMPRESS = "compress"  # job engine for compression jobs (everything else is OCR)
 
 _EXT = {
     ".pdf": PDF,
@@ -39,6 +42,17 @@ def classify(name: str, head: bytes | None = None) -> str:
         if head[:4] in (b"II*\x00", b"MM\x00*"):
             return TIFF
     return _EXT.get(ext(name), UNSUPPORTED)
+
+
+def classify_for(engine: str, name: str, head: bytes | None = None) -> str:
+    """Like classify(), but compress jobs accept every file type (zips are still unpacked)."""
+    kind = classify(name, head)
+    if engine != COMPRESS or kind != UNSUPPORTED:
+        return kind
+    base = posixpath.basename(name).lower()
+    if base in _SKIP_NAMES or base.startswith("._") or "__macosx/" in name.lower():
+        return UNSUPPORTED
+    return FILE
 
 
 def content_type(name: str) -> str:

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, bytes, type Doc, type Job, when } from '../api';
+import { api, bytes, isCompress, saving, type Doc, type Job, when } from '../api';
 import type { Session } from '../App';
 import { StatusBadge } from './Dashboard';
 
@@ -62,6 +62,7 @@ export default function JobDetail({ session }: { session: Session }) {
   if (error) return <p className="error">{error}</p>;
   if (!job) return <p className="muted">Loading…</p>;
   const finished = job.docsDone + job.docsFailed + job.docsSkipped;
+  const shrink = isCompress(job);
   const pct = job.pagesTotal ? (job.pagesDone / job.pagesTotal) * 100 : job.docsTotal ? (finished / job.docsTotal) * 100 : 0;
 
   return (
@@ -70,7 +71,8 @@ export default function JobDetail({ session }: { session: Session }) {
         <div>
           <h1>{job.name}</h1>
           <p className="muted small">
-            {job.engine}{job.language && job.language !== 'eng' ? ` · ${job.language}` : ''} · created {when(job.createdAt)}
+            {shrink ? `Compress · ${job.compress?.level ?? ''}` : `OCR · ${job.engine}`}
+            {job.language && job.language !== 'eng' ? ` · ${job.language}` : ''} · created {when(job.createdAt)}
             {job.finishedAt && ` · finished ${when(job.finishedAt)}`}
           </p>
         </div>
@@ -84,7 +86,9 @@ export default function JobDetail({ session }: { session: Session }) {
       <div className="stats card">
         <div><StatusBadge job={job} /></div>
         <div><b>{finished.toLocaleString()}</b> / {job.docsTotal.toLocaleString()} files</div>
-        <div><b>{job.pagesDone.toLocaleString()}</b> / {job.pagesTotal.toLocaleString()} pages</div>
+        {shrink
+          ? <div>{job.bytesIn ? <><b>{bytes(job.bytesIn)} → {bytes(job.bytesOut)}</b> <span className="ok">{saving(job.bytesIn, job.bytesOut)}</span></> : 'Sizes appear as files finish'}</div>
+          : <div><b>{job.pagesDone.toLocaleString()}</b> / {job.pagesTotal.toLocaleString()} pages</div>}
         <div>{job.docsFailed > 0 && <span className="error">{job.docsFailed} failed</span>} {job.docsSkipped > 0 && <span className="muted">{job.docsSkipped} skipped</span>}</div>
         {session.settings.billingEnabled && <div className="muted">{job.creditsCharged.toLocaleString()} credits used</div>}
       </div>
@@ -92,6 +96,7 @@ export default function JobDetail({ session }: { session: Session }) {
         <div className="bar big"><span style={{ width: `${Math.min(99, pct)}%` }} /></div>
       )}
       {job.status === 'finalizing' && <p className="muted">Packing results into a zip…</p>}
+      {shrink && job.status === 'processing' && <p className="muted small">Videos can take a few minutes each. You can close this page; it keeps going.</p>}
       {job.lastError && <p className="error small">{job.lastError}</p>}
 
       <div className="row between">
@@ -102,17 +107,26 @@ export default function JobDetail({ session }: { session: Session }) {
         </select>
       </div>
       <table className="table">
-        <thead><tr><th>File</th><th>Status</th><th>Pages</th><th>Size</th><th>Download</th></tr></thead>
+        <thead>{shrink
+          ? <tr><th>File</th><th>Status</th><th>Before</th><th>After</th><th>Download</th></tr>
+          : <tr><th>File</th><th>Status</th><th>Pages</th><th>Size</th><th>Download</th></tr>}</thead>
         <tbody>
           {docs.map((d) => (
             <tr key={d.docId}>
-              <td className="path">{d.relPath}{d.error && <div className="error small">{d.error}</div>}</td>
+              <td className="path">{d.relPath}{d.error && <div className="error small">{d.error}</div>}
+                {d.note && <div className="muted small">{d.note}</div>}</td>
               <td><span className={`badge d-${d.status}`}>{d.status}{d.status === 'processing' && d.unitsTotal > 1 ? ` ${d.unitsDone}/${d.unitsTotal}` : ''}</span></td>
-              <td>{d.pages || ''}</td>
-              <td className="muted">{bytes(d.size)}</td>
+              {shrink ? <>
+                <td className="muted">{bytes(d.size)}</td>
+                <td>{d.compressedSize !== undefined && d.compressedSize !== null
+                  ? <>{bytes(d.compressedSize)} <span className="ok small">{saving(d.size, d.compressedSize)}</span></> : ''}</td>
+              </> : <>
+                <td>{d.pages || ''}</td>
+                <td className="muted">{bytes(d.size)}</td>
+              </>}
               <td className="row gap">
                 {Object.keys(d.outputs || {}).sort().map((fmt) => (
-                  <button key={fmt} className="ghost small" onClick={() => download(`/jobs/${jobId}/documents/${d.docId}/download?format=${fmt}`)}>{fmt}</button>
+                  <button key={fmt} className="ghost small" onClick={() => download(`/jobs/${jobId}/documents/${d.docId}/download?format=${fmt}`)}>{fmt === 'file' ? 'download' : fmt}</button>
                 ))}
               </td>
             </tr>

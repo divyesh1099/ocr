@@ -16,7 +16,8 @@ from .. import aws, config, db, events, jobs, outputs, queues, s3io
 log = logging.getLogger("ocr")
 log.setLevel(logging.INFO)
 
-MANIFEST_FIELDS = ["path", "status", "pages", "engine", "error", "txt", "json", "pdf"]
+MANIFEST_FIELDS = ["path", "status", "pages", "engine", "error", "txt", "json", "pdf", "file",
+                   "originalBytes", "compressedBytes", "note"]
 
 
 def handler(event, context):
@@ -49,6 +50,9 @@ def finalize(job_id: str) -> None:
                 outs = doc.get("outputs") or {}
                 row = {"path": doc["relPath"], "status": doc["status"], "pages": doc.get("pages", 0),
                        "engine": job["engine"], "error": doc.get("error", "")}
+                if "compressedSize" in doc:
+                    row.update(originalBytes=doc.get("size"), compressedBytes=doc["compressedSize"],
+                               note=doc.get("note", ""))
                 for fmt, key in outs.items():
                     arc = key[len(files_prefix):] if key.startswith(files_prefix) else key.rsplit("/", 1)[-1]
                     row[fmt] = arc

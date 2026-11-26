@@ -84,7 +84,7 @@ def _register_and_dispatch(job_id: str, key: str, rel: str, kind: str, size: int
 def file_task(job: dict, msg: dict) -> None:
     job_id, task_id = job["jobId"], msg["taskId"]
     bucket, key, rel, size = config.DATA_BUCKET(), msg["key"], msg["relPath"], int(msg.get("size", 0))
-    kind = filetypes.classify(rel, _head(bucket, key))
+    kind = filetypes.classify_for(job["engine"], rel, _head(bucket, key))
 
     if kind == filetypes.ZIP:
         if int(msg.get("depth", 0)) >= config.MAX_ZIP_DEPTH:
@@ -147,7 +147,7 @@ def zip_batch(job: dict, msg: dict) -> None:
         for info in infos:
             name = info.filename
             rel = filetypes.safe_relpath(posixpath.join(zip_rel, name))
-            kind = filetypes.classify(name)
+            kind = filetypes.classify_for(job["engine"], name)
             entry_key = out_prefix + filetypes.safe_relpath(name)
             if kind == filetypes.UNSUPPORTED:
                 planned.append({"action": "skip", "key": entry_key, "rel": rel, "kind": kind, "size": info.file_size,

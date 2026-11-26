@@ -84,6 +84,15 @@ export interface PublicSettings {
   currency: string;
   razorpayKeyId: string;
   maxFileBytes: number;
+  compressEnabled?: boolean;
+}
+
+export interface CompressOptions {
+  level: 'light' | 'balanced' | 'strong';
+  imageFormat: 'keep' | 'webp' | 'jpeg';
+  maxImageSide: number;
+  videoHeight: number;
+  audioBitrate: number;
 }
 
 export interface Job {
@@ -107,6 +116,18 @@ export interface Job {
   language?: string;
   lastError?: string;
   owner: string;
+  compress?: CompressOptions;
+  bytesIn?: number;
+  bytesOut?: number;
+}
+
+export const isCompress = (job: Job) => job.engine === 'compress';
+
+/** "-42%" style saving, or '' when nothing is known yet. */
+export function saving(before?: number, after?: number) {
+  if (!before || after === undefined || after === null) return '';
+  const pct = Math.round((1 - after / before) * 100);
+  return pct > 0 ? `−${pct}%` : '0%';
 }
 
 export interface Doc {
@@ -121,6 +142,8 @@ export interface Doc {
   unitsFailed: number;
   error?: string;
   outputs?: Record<string, string>;
+  compressedSize?: number;
+  note?: string;
 }
 
 // ------------------------------------------------------------------ formatting

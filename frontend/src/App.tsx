@@ -3,6 +3,8 @@ import { Authenticator } from '@aws-amplify/ui-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api, logout, usesCloudflareAccess, type PublicSettings, type User } from './api';
 import Dashboard from './pages/Dashboard';
+import Home from './pages/Home';
+import Compress from './pages/Compress';
 import NewJob from './pages/NewJob';
 import JobDetail from './pages/JobDetail';
 import Billing from './pages/Billing';
@@ -18,15 +20,15 @@ function Landing({ settings }: { settings: PublicSettings | null }) {
   const mode = settings?.accessMode;
   return (
     <div className="landing">
-      <h1>Text out of anything.</h1>
+      <h1>Read it. Shrink it.</h1>
       <p className="lede">
-        PDFs with thousands of pages, scanned images, zip archives and whole folders. Upload them and download the
-        text as TXT, JSON with line positions, or searchable PDF.
+        Pull the text out of scanned PDFs and photos, or make any file smaller: PDFs, photos, videos, audio and
+        Office documents. Single files, zip archives or whole folders.
       </p>
       <ul className="points">
-        <li><b>Any size.</b> Multi-gigabyte files upload straight to storage in parallel parts.</li>
-        <li><b>Zips and folders.</b> Nested archives are unpacked and folder structure is kept in the results.</li>
-        <li><b>Two engines.</b> AWS Textract for the best accuracy, Tesseract for bulk work and Indian languages.</li>
+        <li><b>OCR.</b> Text as TXT, JSON with line positions, or a searchable PDF. English and 11 Indian languages.</li>
+        <li><b>Compress.</b> Pick how small. Nothing ever comes back bigger than it went in.</li>
+        <li><b>Any size.</b> Multi-gigabyte files and folders upload straight to storage, structure kept.</li>
       </ul>
       <p className="muted small">
         {mode === 'invite' && 'Accounts are invite only right now.'}
@@ -45,8 +47,10 @@ function Shell({ session, children }: { session: Session; children: React.ReactN
       <header className="topbar">
         <NavLink to="/" className="brand"><span className="logo" />{settings.siteName}</NavLink>
         <nav>
-          <NavLink to="/" end>Jobs</NavLink>
-          <NavLink to="/new">New job</NavLink>
+          <NavLink to="/" end>Home</NavLink>
+          <NavLink to="/ocr">OCR</NavLink>
+          {settings.compressEnabled && <NavLink to="/compress">Compress</NavLink>}
+          <NavLink to="/jobs" end>Jobs</NavLink>
           {settings.billingEnabled && <NavLink to="/billing">Credits</NavLink>}
           {user.role === 'superadmin' && <NavLink to="/admin">Admin</NavLink>}
         </nav>
@@ -99,8 +103,11 @@ function SignedIn() {
   return (
     <Shell session={session}>
       <Routes>
-        <Route path="/" element={<Dashboard session={session} />} />
-        <Route path="/new" element={<NewJob session={session} />} />
+        <Route path="/" element={<Home session={session} />} />
+        <Route path="/ocr" element={<NewJob session={session} />} />
+        <Route path="/new" element={<Navigate to="/ocr" replace />} />
+        <Route path="/compress" element={<Compress session={session} />} />
+        <Route path="/jobs" element={<Dashboard session={session} />} />
         <Route path="/jobs/:jobId" element={<JobDetail session={session} />} />
         <Route path="/billing" element={<Billing session={session} />} />
         <Route path="/admin" element={session.user.role === 'superadmin' ? <Admin session={session} /> : <Navigate to="/" />} />
