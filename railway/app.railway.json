@@ -1,0 +1,5 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "builder": "DOCKERFILE", "dockerfilePath": "railway/app.Dockerfile", "watchPatterns": ["backend/src/**","backend/requirements.txt","selfhost/server.py","frontend/**","railway/app.Dockerfile"] },
+  "deploy": { "restartPolicyType": "ALWAYS","healthcheckPath":"/healthz","healthcheckTimeout":300 }
+}
