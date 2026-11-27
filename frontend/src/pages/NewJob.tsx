@@ -20,7 +20,7 @@ export default function NewJob({ session }: { session: Session }) {
   const [name, setName] = useState('');
   const [engine, setEngine] = useState(settings.defaultEngine);
   const [language, setLanguage] = useState('eng');
-  const [outputs, setOutputs] = useState<string[]>(['txt', 'json']);
+  const [outputs, setOutputs] = useState<string[]>(['pdf']);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

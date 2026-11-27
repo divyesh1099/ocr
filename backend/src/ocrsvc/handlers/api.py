@@ -155,7 +155,7 @@ def create_job(req: Request):
     engine = body.get("engine") or s["defaultEngine"]
     if engine not in s["enabledEngines"]:
         raise HttpError(400, f"Engine must be one of {s['enabledEngines']}")
-    outputs = [o for o in body.get("outputs", ["txt", "json"]) if o in OUTPUT_FORMATS] or ["txt"]
+    outputs = [o for o in body.get("outputs", ["pdf"]) if o in OUTPUT_FORMATS] or ["txt"]
     if users.billing_applies(req.user or {}) and int((req.user or {}).get("credits", 0)) <= 0:
         raise HttpError(402, "You have no credits left. Buy a credit pack to continue.")
     language = str(body.get("language") or "eng")
